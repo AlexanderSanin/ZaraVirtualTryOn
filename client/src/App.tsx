@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
 import TryOn from "@/pages/try-on";
+import SimpleTryOn from "@/pages/simple-tryon";
 import Results from "@/pages/results";
 import NotFound from "@/pages/not-found";
 
@@ -13,6 +14,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/try" component={TryOn} />
+      <Route path="/simple" component={SimpleTryOn} />
       <Route path="/results/:id" component={Results} />
       <Route component={NotFound} />
     </Switch>
