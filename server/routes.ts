@@ -16,8 +16,8 @@ interface JobState {
 
 const jobsMap = new Map<string, JobState>();
 
-// Ensure uploads directory exists
-const uploadsDir = path.resolve(process.cwd(), 'uploads');
+// Ensure public/uploads directory exists
+const uploadsDir = path.resolve(process.cwd(), 'public/uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -51,51 +51,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return req.headers['x-session-id'] || randomUUID();
   };
 
-  // Upload photo endpoint
+  // Upload photo endpoint  
   app.post('/api/upload', upload.single('photo'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: 'No file uploaded' });
       }
 
-      const session = await storage.createUploadSession({
-        filename: req.file.originalname,
-        filepath: req.file.path,
-        filesize: req.file.size,
-        mimetype: req.file.mimetype,
-      });
-
-      res.json({
-        assetId: session.id,
-        url: `/api/uploads/${session.id}`,
-        filename: session.filename,
-        size: session.filesize
-      });
+      console.log(`📁 File uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
+      
+      // Return accessible URL pointing to public/uploads
+      const url = `/uploads/${req.file.filename}`;
+      
+      res.json({ url });
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       res.status(500).json({ message: 'Upload failed' });
     }
   });
 
-  // Serve uploaded files
-  app.get('/api/uploads/:id', async (req, res) => {
-    try {
-      const session = await storage.getUploadSession(req.params.id);
-      if (!session) {
-        return res.status(404).json({ message: 'File not found' });
-      }
-
-      if (!fs.existsSync(session.filepath)) {
-        return res.status(404).json({ message: 'File not found on disk' });
-      }
-
-      res.setHeader('Content-Type', session.mimetype);
-      res.sendFile(path.resolve(session.filepath));
-    } catch (error) {
-      console.error('File serve error:', error);
-      res.status(500).json({ message: 'Failed to serve file' });
-    }
-  });
 
   // Get products with filtering
   app.get('/api/products', async (req, res) => {
@@ -133,6 +107,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobId,
         status: 'processing'
       });
+      
+      console.log(`🚀 Created try-on job: ${jobId}`);
+      console.log(`   User image: ${userImageUrl}`);
+      console.log(`   Clothing: ${clothingImageUrl}`);
 
       // Call n8n webhook
       callN8nWebhook(jobId, userImageUrl, clothingImageUrl);
@@ -228,6 +206,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       jobsMap.set(jobId, updatedJob);
+      
+      console.log(`✅ Job ${jobId} updated: status=${status}${resultUrl ? `, resultUrl=${resultUrl}` : ''}`);
 
       res.status(200).json({ message: 'Job updated successfully' });
     } catch (error) {
@@ -241,7 +221,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Call n8n webhook
   async function callN8nWebhook(jobId: string, userImageUrl: string, clothingImageUrl: string) {
-    const webhookUrl = 'http://localhost:5678/webhook/tryon';
+    const webhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/tryon';
+    
+    console.log(`🔗 Calling n8n webhook: ${webhookUrl}`);
     
     try {
       const response = await fetch(webhookUrl, {
@@ -257,19 +239,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!response.ok) {
-        console.error(`n8n webhook failed: ${response.status}`);
+        console.error(`❌ n8n webhook failed: ${response.status}`);
         // Update job status to failed
         const job = jobsMap.get(jobId);
         if (job) {
           jobsMap.set(jobId, { ...job, status: 'failed' });
+          console.log(`❌ Job ${jobId} marked as failed due to webhook error`);
         }
+      } else {
+        console.log(`✅ n8n webhook called successfully for job ${jobId}`);
       }
     } catch (error) {
-      console.error('n8n webhook error:', error);
+      console.error('❌ n8n webhook error:', error);
       // Update job status to failed
       const job = jobsMap.get(jobId);
       if (job) {
         jobsMap.set(jobId, { ...job, status: 'failed' });
+        console.log(`❌ Job ${jobId} marked as failed due to connection error`);
       }
     }
   }
