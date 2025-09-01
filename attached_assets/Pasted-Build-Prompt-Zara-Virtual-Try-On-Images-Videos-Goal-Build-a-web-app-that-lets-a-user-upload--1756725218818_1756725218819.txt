@@ -1,0 +1,179 @@
+Build Prompt: Zara Virtual Try-On (Images & Videos)
+Goal
+
+Build a web app that lets a user:
+
+upload a photo or short video of themselves,
+
+browse & select clothing items from zara.com (product thumbnails, category, name, price, sizes),
+
+generate a virtual try-on composition where the clothing is realistically overlaid on the person (image or first frame of video; optional multi-frame for short videos).
+
+Important: Respect Zara’s site terms. If direct scraping is disallowed, implement a pluggable “Product Source” with two modes:
+
+Mode A (Preferred): ingest a pre-provided CSV/JSON feed of Zara products (id, title, price, image URLs) that we can legally use.
+
+Mode B (Experimental): server-side scraper with robots/TOS checks & a single toggle to disable. All scraping logic isolated to /lib/productSources/zaraScraper.* so it can be removed easily.
+
+Stack
+
+Frontend: Next.js 14 (App Router), TailwindCSS, shadcn/ui, react-hook-form, react-dropzone, framer-motion.
+
+Backend: Next.js API routes (or Node/Express in /server), TypeScript, Replicate SDK.
+
+Storage: Local for dev; abstract storage interface with S3-compatible adapter (env-configurable).
+
+Background jobs: Webhook-first flow with Replicate; optional n8n webhook for post-processing steps.
+
+Auth (optional but ready): NextAuth email-magic or simple signed sessions for rate limiting.
+
+CI: Minimal ESLint + typecheck + Playwright smoke tests.
+
+Core Features
+
+Upload
+
+Accept JPG/PNG up to 10MB; MP4/MOV up to 20s, 720p cap.
+
+Client shows thumbnail & basic validation; server virus/type check.
+
+Store to /uploads/{sessionId}/original/* (or S3) with signed URLs.
+
+Product Picker (Zara)
+
+Left pane: filters (women/men/kids, category, size availability), search.
+
+Grid shows product card: image(s), name, price, sizes.
+
+Select 1–3 items to try at once.
+
+Virtual Try-On
+
+Pipeline:
+
+Person segmentation (e.g., replicate: sam2 / MODNet / robust portrait segmentation).
+
+Garment parsing/warping (e.g., VTON class model on Replicate; if none, use a 2-step: body landmarks + garment mask + Poisson/alpha blend).
+
+Composition + color matching + shadow softening.
+
+For videos: process first frame immediately for preview; if user confirms, run every Nth frame (configurable, default N=3) and stitch back to MP4; if cost/time too high, fall back to single-frame preview download.
+
+Webhook Flow
+
+Start job → receive jobId.
+
+Replicate/n8n posts to /api/webhooks/tryon with status + result URLs.
+
+Frontend subscribes via SSE (/api/jobs/:id/stream) or polls.
+
+Results
+
+Gallery per session: show each try-on result, allow download/share.
+
+Keep results 24h by default; configurable retention.
+
+Pages & UX
+
+/ — Hero + “Upload” + “Pick clothes”.
+
+/try — Two-step wizard: Upload → Select Products → Generate.
+
+/results/:id — Job status, preview, download, “Try another”.
+
+Components: Uploader, ProductGrid, TryOnConfigurator, ProgressPanel, ResultCard.
+
+API (Contract)
+
+POST /api/upload — multipart; returns { assetId, url }.
+
+GET /api/products?source=zara&category=...&q=... — returns { items: [{id,title,price,currency,images:[...],sizes:[...]}] }.
+
+POST /api/tryon — body { userAssetId, productIds:[...], mode:"image"|"video", everyNFrames?:number } → { jobId }.
+
+GET /api/jobs/:id — { status:"queued"|"processing"|"succeeded"|"failed", resultUrls?:string[] }.
+
+POST /api/webhooks/tryon — (Replicate/n8n) verifies signature, updates job.
+
+GET /api/results/:id — signed URLs list for display.
+
+Replicate Integration
+
+Env vars: REPLICATE_API_TOKEN.
+
+Models (declare as adapters so they’re swappable):
+
+personSegmentation.run(imageUrl|frameUrl) -> maskUrl
+
+garmentWarp.run(productImageUrl, bodyKeypoints|maskUrl) -> warpedGarmentUrl
+
+compositor.run(baseImageUrl, warpedGarmentUrl, personMaskUrl) -> composedImageUrl
+
+If a single end-to-end VTON model is available on Replicate, add vton.run(personImageUrl, garmentImageUrl) -> composedImageUrl and prefer it.
+
+n8n (Optional)
+
+Provide an /integrations/n8n.json example workflow:
+
+Trigger: POST /api/webhooks/tryon
+
+Steps: download assets → call Replicate steps → upload outputs → callback to /api/jobs/:id.
+
+Data Models (Prisma or simple TS)
+type JobStatus = "queued"|"processing"|"succeeded"|"failed";
+interface Job { id:string; userSession:string; assetId:string; productIds:string[]; mode:"image"|"video"; status:JobStatus; resultUrls?:string[]; createdAt:number; updatedAt:number; }
+interface Product { id:string; title:string; price:number; currency:string; images:string[]; sizes:string[]; category:string; gender?:string; }
+
+Security & Compliance
+
+Content safety: disallow nudity/NSFW uploads; basic face blurring toggle for demos.
+
+Rate limit per IP/session; max concurrent jobs per session.
+
+Verify webhooks (HMAC secret WEBHOOK_SECRET).
+
+Respect Zara trademarks/imagery usage; show attribution line and link back to product page where allowed. Provide a config flag to disable product thumbnails if required.
+
+Testing
+
+Unit tests for API handlers & adapters.
+
+E2E: Upload → Select → Generate (mock Replicate).
+
+Playwright smoke: page loads, upload validation, product search, job status transitions.
+
+Deliverables
+
+Repo with README covering:
+
+Setup (env, npm run dev), seeding product data from data/zara.sample.json.
+
+How to switch between Product Source modes.
+
+How to plug different Replicate models.
+
+Demo video/GIF: image try-on and short video flow.
+
+Example .env.example:
+
+REPLICATE_API_TOKEN=...
+STORAGE_DRIVER=local|s3
+S3_BUCKET=...
+S3_REGION=...
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+WEBHOOK_SECRET=...
+PRODUCT_SOURCE=zara-json|zara-scraper
+
+
+Cost guardrails: per-job frame cap, max outputs, and clear error messages.
+
+Acceptance Criteria
+
+I can upload a selfie or a 10–20s video, pick 1–3 Zara items, and get a composed try-on image (and for videos, at least a first-frame preview).
+
+Jobs run asynchronously with visible progress, and results show in a gallery with download.
+
+Code isolates Product Source and VTON pipeline behind adapters so we can swap/disable easily.
+
+All secrets in env, webhook verified, and basic rate limiting enabled.
