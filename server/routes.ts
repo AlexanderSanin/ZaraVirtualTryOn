@@ -110,37 +110,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/tryon', async (req, res) => {
     try {
       const schema = z.object({
-        userAssetId: z.string(),
-        productIds: z.array(z.string()).min(1).max(3),
+        assetUrl: z.string().url('Must be a valid URL'),
+        productImageUrl: z.string().url('Must be a valid URL'),
         mode: z.enum(['image', 'video']).default('image'),
       });
 
-      const { userAssetId, productIds, mode } = schema.parse(req.body);
+      const { assetUrl, productImageUrl, mode } = schema.parse(req.body);
       const sessionId = getSessionId(req);
-
-      // Verify upload exists
-      const uploadSession = await storage.getUploadSession(userAssetId);
-      if (!uploadSession) {
-        return res.status(400).json({ message: 'Invalid upload asset ID' });
-      }
-
-      // Verify all products exist
-      for (const productId of productIds) {
-        const product = await storage.getProduct(productId);
-        if (!product) {
-          return res.status(400).json({ message: `Product ${productId} not found` });
-        }
-      }
 
       const job = await storage.createTryOnJob({
         sessionId,
-        uploadId: userAssetId,
-        productIds,
+        uploadId: assetUrl, // Store the URL directly for external processing
+        productIds: [productImageUrl], // Store product URL
         status: 'queued',
       });
 
-      // Start processing simulation
-      simulateProcessing(job.id);
+      // Send to n8n webhook or fallback to placeholder
+      const success = await sendToN8nWebhook(job.id, assetUrl, productImageUrl);
+      
+      if (!success) {
+        // Fallback to placeholder generation
+        generatePlaceholderResult(job.id);
+      }
 
       res.json({ jobId: job.id });
     } catch (error) {
@@ -202,20 +193,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Simulate processing function
-  async function simulateProcessing(jobId: string) {
+  // Webhook endpoint for n8n callbacks
+  app.post('/api/webhooks/tryon', async (req, res) => {
     try {
-      // Update to processing
+      const schema = z.object({
+        jobId: z.string(),
+        resultUrl: z.string().url(),
+        status: z.enum(['succeeded', 'failed']).default('succeeded'),
+      });
+
+      const { jobId, resultUrl, status } = schema.parse(req.body);
+
+      // Verify job exists
+      const job = await storage.getTryOnJob(jobId);
+      if (!job) {
+        return res.status(404).json({ message: 'Job not found' });
+      }
+
+      // Update job with result
+      await storage.updateTryOnJob(jobId, {
+        status,
+        resultUrls: status === 'succeeded' ? [resultUrl] : null,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Webhook error:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Invalid webhook data', errors: error.errors });
+      }
+      res.status(500).json({ message: 'Webhook processing failed' });
+    }
+  });
+
+  // Send job to n8n webhook
+  async function sendToN8nWebhook(jobId: string, assetUrl: string, productImageUrl: string): Promise<boolean> {
+    const webhookUrl = process.env.N8N_WEBHOOK_URL;
+    
+    if (!webhookUrl) {
+      console.warn('N8N_WEBHOOK_URL not configured, falling back to placeholder');
+      return false;
+    }
+
+    try {
       await storage.updateTryOnJob(jobId, { status: 'processing' });
       
-      // Simulate processing time (3-5 seconds)
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobId,
+          assetUrl,
+          productImageUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`n8n webhook failed: ${response.status}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('n8n webhook error:', error);
+      return false;
+    }
+  }
+
+  // Generate placeholder result when external services aren't available
+  async function generatePlaceholderResult(jobId: string) {
+    try {
+      await storage.updateTryOnJob(jobId, { status: 'processing' });
+      
+      // Simulate processing time
       const processingTime = 3000 + Math.random() * 2000;
       
       setTimeout(async () => {
-        // Generate mock result URLs
-        const resultUrls = [
-          'https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=750'
+        // Generate placeholder result URLs
+        const placeholderResults = [
+          'https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=750',
+          'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=750',
+          'https://images.unsplash.com/photo-1469334031218-e382a71b716b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=750'
         ];
+        
+        const resultUrls = [placeholderResults[Math.floor(Math.random() * placeholderResults.length)]];
         
         await storage.updateTryOnJob(jobId, { 
           status: 'succeeded',
@@ -224,7 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }, processingTime);
       
     } catch (error) {
-      console.error('Processing simulation error:', error);
+      console.error('Placeholder generation error:', error);
       await storage.updateTryOnJob(jobId, { status: 'failed' });
     }
   }

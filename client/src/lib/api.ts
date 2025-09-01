@@ -7,8 +7,8 @@ export interface ProductFilters {
 }
 
 export interface CreateTryOnJobRequest {
-  userAssetId: string;
-  productIds: string[];
+  assetUrl: string;
+  productImageUrl: string;
   mode: 'image' | 'video';
 }
 

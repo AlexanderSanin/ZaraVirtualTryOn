@@ -6,6 +6,9 @@ import ProductGrid from "@/components/product-grid";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +20,7 @@ export default function TryOn() {
   const [step, setStep] = useState<'upload' | 'select' | 'processing'>('upload');
   const [uploadSession, setUploadSession] = useState<UploadSession | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
+  const [productImageUrl, setProductImageUrl] = useState('');
   const [processingProgress, setProcessingProgress] = useState(0);
 
   const createTryOnMutation = useMutation({
@@ -79,14 +83,21 @@ export default function TryOn() {
   };
 
   const handleGenerateTryOn = () => {
-    if (!uploadSession || selectedProducts.length === 0) return;
+    if (!uploadSession) return;
+    
+    let finalProductUrl = productImageUrl;
+    if (!finalProductUrl && selectedProducts.length > 0) {
+      finalProductUrl = selectedProducts[0].images[0];
+    }
+    
+    if (!finalProductUrl) return;
 
     setStep('processing');
     setProcessingProgress(20);
     
     createTryOnMutation.mutate({
-      userAssetId: uploadSession.assetId,
-      productIds: selectedProducts.map(p => p.id),
+      assetUrl: uploadSession.url,
+      productImageUrl: finalProductUrl,
       mode: 'image',
     });
   };
@@ -122,26 +133,56 @@ export default function TryOn() {
         <section className="py-16 px-4 bg-secondary/30">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4">Browse Collection</h2>
-              <p className="text-muted-foreground">Select up to 3 items to try on</p>
+              <h2 className="text-3xl font-bold mb-4">Choose Your Product</h2>
+              <p className="text-muted-foreground">Browse our collection or enter a direct product image URL</p>
             </div>
 
-            <ProductGrid 
-              onSelectionChange={handleProductSelect}
-              maxSelection={3}
-            />
+            <Tabs defaultValue="browse" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-8">
+                <TabsTrigger value="browse" data-testid="tab-browse">Browse Collection</TabsTrigger>
+                <TabsTrigger value="url" data-testid="tab-url">Enter Product URL</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="browse" className="space-y-8">
+                <ProductGrid 
+                  onSelectionChange={handleProductSelect}
+                  maxSelection={1}
+                />
+              </TabsContent>
+              
+              <TabsContent value="url" className="space-y-8">
+                <Card className="max-w-2xl mx-auto">
+                  <CardContent className="pt-6">
+                    <div className="space-y-4">
+                      <Label htmlFor="product-url">Product Image URL</Label>
+                      <Input
+                        id="product-url"
+                        type="url"
+                        placeholder="https://example.com/product-image.jpg"
+                        value={productImageUrl}
+                        onChange={(e) => setProductImageUrl(e.target.value)}
+                        data-testid="input-product-url"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Enter a direct URL to any product image you'd like to try on
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
 
             <div className="text-center mt-8">
               <Button 
                 onClick={handleGenerateTryOn}
-                disabled={selectedProducts.length === 0 || createTryOnMutation.isPending}
+                disabled={(selectedProducts.length === 0 && !productImageUrl) || createTryOnMutation.isPending}
                 size="lg"
                 className="px-8"
                 data-testid="button-generate-tryon"
               >
-                {selectedProducts.length === 0 
-                  ? 'Select Products to Continue'
-                  : `Generate Try-On (${selectedProducts.length} item${selectedProducts.length > 1 ? 's' : ''})`
+                {(selectedProducts.length === 0 && !productImageUrl)
+                  ? 'Select a Product or Enter URL to Continue'
+                  : 'Generate Virtual Try-On'
                 }
               </Button>
             </div>

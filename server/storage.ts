@@ -73,7 +73,13 @@ export class MemStorage implements IStorage {
 
   async createProduct(insertProduct: InsertProduct): Promise<Product> {
     const id = randomUUID();
-    const product: Product = { ...insertProduct, id };
+    const product: Product = { 
+      ...insertProduct, 
+      id,
+      gender: insertProduct.gender || null,
+      currency: insertProduct.currency || 'EUR',
+      description: insertProduct.description || null
+    };
     this.products.set(id, product);
     return product;
   }
@@ -100,8 +106,10 @@ export class MemStorage implements IStorage {
   async createTryOnJob(insertJob: InsertTryOnJob): Promise<TryOnJob> {
     const id = randomUUID();
     const job: TryOnJob = { 
-      ...insertJob, 
-      id, 
+      ...insertJob,
+      id,
+      status: insertJob.status || 'queued',
+      resultUrls: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };

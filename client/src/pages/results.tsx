@@ -114,7 +114,7 @@ export default function Results() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="selected-products-summary">
-                {results.products.map((product) => (
+                {results.products.map((product: any) => (
                   <div key={product.id} className="flex items-center space-x-3 p-3 bg-secondary rounded-lg">
                     <img 
                       src={product.images[0]} 
