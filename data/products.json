@@ -1,0 +1,134 @@
+{
+  "products": [
+    {
+      "id": "1",
+      "title": "Minimalist Blazer",
+      "price": 8995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["S", "M", "L", "XL"],
+      "category": "jackets",
+      "gender": "women",
+      "description": "A sleek and modern blazer perfect for professional settings"
+    },
+    {
+      "id": "2",
+      "title": "White Summer Dress",
+      "price": 5995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1595777457583-95e059d581b8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["XS", "S", "M", "L"],
+      "category": "dresses",
+      "gender": "women",
+      "description": "Light and airy summer dress in crisp white"
+    },
+    {
+      "id": "3",
+      "title": "Classic Denim Jacket",
+      "price": 7995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1544966503-7cc5ac882d5f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["S", "M", "L", "XL", "XXL"],
+      "category": "jackets",
+      "gender": "unisex",
+      "description": "Timeless denim jacket that pairs with everything"
+    },
+    {
+      "id": "4",
+      "title": "Cashmere Sweater",
+      "price": 12995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1576566588028-4147f3842f27?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["XS", "S", "M", "L"],
+      "category": "knitwear",
+      "gender": "women",
+      "description": "Luxurious cashmere sweater for ultimate comfort"
+    },
+    {
+      "id": "5",
+      "title": "Cotton Shirt",
+      "price": 3995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["XS", "S", "M", "L", "XL"],
+      "category": "shirts",
+      "gender": "women",
+      "description": "Crisp cotton shirt perfect for work or casual wear"
+    },
+    {
+      "id": "6",
+      "title": "Evening Dress",
+      "price": 14995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1566479179817-c7d93a5ef227?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["XS", "S", "M", "L"],
+      "category": "formal",
+      "gender": "women",
+      "description": "Elegant evening dress for special occasions"
+    },
+    {
+      "id": "7",
+      "title": "Basic T-Shirt",
+      "price": 1995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["S", "M", "L", "XL", "XXL"],
+      "category": "basics",
+      "gender": "men",
+      "description": "Essential basic t-shirt in navy blue"
+    },
+    {
+      "id": "8",
+      "title": "Wool Cardigan",
+      "price": 9995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["XS", "S", "M", "L", "XL"],
+      "category": "knitwear",
+      "gender": "women",
+      "description": "Cozy wool cardigan in neutral tones"
+    },
+    {
+      "id": "9",
+      "title": "Leather Jacket",
+      "price": 19995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1520975916090-3105956dac38?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["S", "M", "L", "XL"],
+      "category": "jackets",
+      "gender": "unisex",
+      "description": "Premium leather jacket with timeless appeal"
+    },
+    {
+      "id": "10",
+      "title": "Midi Skirt",
+      "price": 4995,
+      "currency": "EUR",
+      "images": [
+        "https://images.unsplash.com/photo-1583496661160-fb5886a13d44?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=500"
+      ],
+      "sizes": ["XS", "S", "M", "L"],
+      "category": "skirts",
+      "gender": "women",
+      "description": "Versatile midi skirt in classic black"
+    }
+  ]
+}
