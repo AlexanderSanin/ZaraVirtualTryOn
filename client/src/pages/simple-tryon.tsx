@@ -99,7 +99,10 @@ export default function SimpleTryOn() {
       setError(null);
       
       // Upload user image first
-      const userImageUrl = await uploadFile(selectedFile);
+      const relativeUrl = await uploadFile(selectedFile);
+      
+      // Convert relative URL to full URL
+      const userImageUrl = `${window.location.origin}${relativeUrl}`;
       
       setStatus('processing');
       
