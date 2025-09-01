@@ -7,6 +7,15 @@ import fs from "fs";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 
+// Simple in-memory job storage
+interface JobState {
+  jobId: string;
+  status: 'processing' | 'completed' | 'failed';
+  resultUrl?: string;
+}
+
+const jobsMap = new Map<string, JobState>();
+
 // Ensure uploads directory exists
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -110,30 +119,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/tryon', async (req, res) => {
     try {
       const schema = z.object({
-        assetUrl: z.string().url('Must be a valid URL'),
-        productImageUrl: z.string().url('Must be a valid URL'),
-        mode: z.enum(['image', 'video']).default('image'),
+        userImageUrl: z.string().url('Must be a valid URL'),
+        clothingImageUrl: z.string().url('Must be a valid URL'),
       });
 
-      const { assetUrl, productImageUrl, mode } = schema.parse(req.body);
-      const sessionId = getSessionId(req);
-
-      const job = await storage.createTryOnJob({
-        sessionId,
-        uploadId: assetUrl, // Store the URL directly for external processing
-        productIds: [productImageUrl], // Store product URL
-        status: 'queued',
-      });
-
-      // Send to n8n webhook or fallback to placeholder
-      const success = await sendToN8nWebhook(job.id, assetUrl, productImageUrl);
+      const { userImageUrl, clothingImageUrl } = schema.parse(req.body);
       
-      if (!success) {
-        // Fallback to placeholder generation
-        generatePlaceholderResult(job.id);
-      }
+      // Generate random jobId
+      const jobId = randomUUID();
+      
+      // Store job status in memory
+      jobsMap.set(jobId, {
+        jobId,
+        status: 'processing'
+      });
 
-      res.json({ jobId: job.id });
+      // Call n8n webhook
+      callN8nWebhook(jobId, userImageUrl, clothingImageUrl);
+
+      res.json({ jobId });
     } catch (error) {
       console.error('Try-on job creation error:', error);
       if (error instanceof z.ZodError) {
@@ -146,17 +150,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get job status
   app.get('/api/jobs/:id', async (req, res) => {
     try {
-      const job = await storage.getTryOnJob(req.params.id);
+      const jobId = req.params.id;
+      const job = jobsMap.get(jobId);
+      
       if (!job) {
         return res.status(404).json({ message: 'Job not found' });
       }
 
-      res.json({
-        status: job.status,
-        resultUrls: job.resultUrls || [],
-        createdAt: job.createdAt,
-        updatedAt: job.updatedAt,
-      });
+      const response: any = {
+        jobId: job.jobId,
+        status: job.status
+      };
+      
+      if (job.resultUrl) {
+        response.resultUrl = job.resultUrl;
+      }
+
+      res.json(response);
     } catch (error) {
       console.error('Job status error:', error);
       res.status(500).json({ message: 'Failed to get job status' });
@@ -198,25 +208,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const schema = z.object({
         jobId: z.string(),
-        resultUrl: z.string().url(),
-        status: z.enum(['succeeded', 'failed']).default('succeeded'),
+        status: z.enum(['processing', 'completed', 'failed']),
+        resultUrl: z.string().url().optional(),
       });
 
-      const { jobId, resultUrl, status } = schema.parse(req.body);
+      const { jobId, status, resultUrl } = schema.parse(req.body);
 
-      // Verify job exists
-      const job = await storage.getTryOnJob(jobId);
-      if (!job) {
+      // Check if job exists
+      const existingJob = jobsMap.get(jobId);
+      if (!existingJob) {
         return res.status(404).json({ message: 'Job not found' });
       }
 
-      // Update job with result
-      await storage.updateTryOnJob(jobId, {
+      // Update job status in memory
+      const updatedJob: JobState = {
+        jobId,
         status,
-        resultUrls: status === 'succeeded' ? [resultUrl] : null,
-      });
+        ...(resultUrl && { resultUrl })
+      };
+      
+      jobsMap.set(jobId, updatedJob);
 
-      res.json({ success: true });
+      res.status(200).json({ message: 'Job updated successfully' });
     } catch (error) {
       console.error('Webhook error:', error);
       if (error instanceof z.ZodError) {
@@ -226,18 +239,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Send job to n8n webhook
-  async function sendToN8nWebhook(jobId: string, assetUrl: string, productImageUrl: string): Promise<boolean> {
-    const webhookUrl = process.env.N8N_WEBHOOK_URL;
+  // Call n8n webhook
+  async function callN8nWebhook(jobId: string, userImageUrl: string, clothingImageUrl: string) {
+    const webhookUrl = 'http://localhost:5678/webhook/tryon';
     
-    if (!webhookUrl) {
-      console.warn('N8N_WEBHOOK_URL not configured, falling back to placeholder');
-      return false;
-    }
-
     try {
-      await storage.updateTryOnJob(jobId, { status: 'processing' });
-      
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
@@ -245,51 +251,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         body: JSON.stringify({
           jobId,
-          assetUrl,
-          productImageUrl,
+          userImageUrl,
+          clothingImageUrl,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`n8n webhook failed: ${response.status}`);
+        console.error(`n8n webhook failed: ${response.status}`);
+        // Update job status to failed
+        const job = jobsMap.get(jobId);
+        if (job) {
+          jobsMap.set(jobId, { ...job, status: 'failed' });
+        }
       }
-
-      return true;
     } catch (error) {
       console.error('n8n webhook error:', error);
-      return false;
+      // Update job status to failed
+      const job = jobsMap.get(jobId);
+      if (job) {
+        jobsMap.set(jobId, { ...job, status: 'failed' });
+      }
     }
   }
 
-  // Generate placeholder result when external services aren't available
-  async function generatePlaceholderResult(jobId: string) {
-    try {
-      await storage.updateTryOnJob(jobId, { status: 'processing' });
-      
-      // Simulate processing time
-      const processingTime = 3000 + Math.random() * 2000;
-      
-      setTimeout(async () => {
-        // Generate placeholder result URLs
-        const placeholderResults = [
-          'https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=750',
-          'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=750',
-          'https://images.unsplash.com/photo-1469334031218-e382a71b716b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&h=750'
-        ];
-        
-        const resultUrls = [placeholderResults[Math.floor(Math.random() * placeholderResults.length)]];
-        
-        await storage.updateTryOnJob(jobId, { 
-          status: 'succeeded',
-          resultUrls 
-        });
-      }, processingTime);
-      
-    } catch (error) {
-      console.error('Placeholder generation error:', error);
-      await storage.updateTryOnJob(jobId, { status: 'failed' });
-    }
-  }
 
   const httpServer = createServer(app);
   return httpServer;

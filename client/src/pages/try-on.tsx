@@ -96,9 +96,8 @@ export default function TryOn() {
     setProcessingProgress(20);
     
     createTryOnMutation.mutate({
-      assetUrl: uploadSession.url,
-      productImageUrl: finalProductUrl,
-      mode: 'image',
+      userImageUrl: uploadSession.url,
+      clothingImageUrl: finalProductUrl,
     });
   };
 

@@ -7,9 +7,8 @@ export interface ProductFilters {
 }
 
 export interface CreateTryOnJobRequest {
-  assetUrl: string;
-  productImageUrl: string;
-  mode: 'image' | 'video';
+  userImageUrl: string;
+  clothingImageUrl: string;
 }
 
 export const api = {
